@@ -303,7 +303,7 @@ function subscribeToEntries(uid) {
   unsubscribeSnap = onSnapshot(q, snapshot => {
     allEntries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     renderLogView();
-    if (!$viewCal.classList.contains('hidden')) renderCalendar();
+    if ($viewCal.style.display !== 'none') renderCalendar();
   }, err => console.error('Firestore read error:', err));
 }
 
@@ -526,8 +526,8 @@ document.querySelectorAll('.toggle-btn').forEach(btn => {
     btn.setAttribute('aria-pressed', 'true');
 
     const view = btn.dataset.view;
-    $viewLog.classList.toggle('hidden', view !== 'log');
-    $viewCal.classList.toggle('hidden', view !== 'calendar');
+    $viewLog.style.display = view === 'log'      ? '' : 'none';
+    $viewCal.style.display = view === 'calendar' ? '' : 'none';
 
     if (view === 'calendar') {
       if (!selectedDate) selectedDate = localDateStr();
