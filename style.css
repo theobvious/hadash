@@ -52,6 +52,12 @@ body {
   color: var(--text);
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .logo {
   font-size: 17px;
   font-weight: 650;
@@ -456,6 +462,107 @@ body {
 
 .cal-entries .date-label { margin-bottom: 6px; }
 
+/* ─── Auth screen ────────────────────────── */
+
+.auth-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  padding: 24px;
+}
+
+.auth-screen.hidden { display: none; }
+
+.auth-card {
+  max-width: 340px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.auth-card svg {
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.auth-title {
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.4px;
+}
+
+.auth-desc {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  max-width: 260px;
+}
+
+.btn-signin {
+  margin-top: 6px;
+  padding: 0 22px;
+  height: 42px;
+  font-size: 14px;
+  gap: 9px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.btn-signin:hover { opacity: 1; background: var(--bg-subtle); }
+
+/* ─── User chip (header) ─────────────────── */
+
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.user-chip.hidden { display: none; }
+
+.user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+
+.user-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sign-out-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: color 0.12s, background 0.12s;
+}
+
+.sign-out-btn:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
 /* ─── Responsive ─────────────────────────── */
 
 @media (max-width: 540px) {
@@ -470,4 +577,6 @@ body {
 
   .cal-weekdays span { font-size: 10px; letter-spacing: 0; }
   .cal-day { font-size: 12px; }
+
+  .user-name { display: none; }
 }
