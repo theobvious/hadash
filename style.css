@@ -4,6 +4,8 @@
   padding: 0;
 }
 
+.hidden { display: none !important; }
+
 :root {
   --bg:         #ffffff;
   --bg-subtle:  #f6f6f6;
