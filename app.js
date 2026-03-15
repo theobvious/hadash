@@ -52,6 +52,10 @@ function formatDateLabel(dateStr) {
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   if (dateStr === localDateStr(yesterday)) return 'Yesterday';
+  return formatFullDate(dateStr);
+}
+
+function formatFullDate(dateStr) {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
@@ -355,11 +359,14 @@ function renderEntryRow(entry) {
   return div;
 }
 
-// ─── Render log view ──────────────────────────────────────────────────────────
+// ─── Render log view (today only) ────────────────────────────────────────────
 
 function renderLogView() {
-  if (!allEntries.length) {
-    $entriesList.innerHTML = '';
+  const todayEntries = allEntries.filter(e => e.date === localDateStr());
+
+  $entriesList.innerHTML = '';
+
+  if (!todayEntries.length) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
     empty.innerHTML = `
@@ -369,41 +376,25 @@ function renderLogView() {
         <path d="M10 4v4M22 4v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         <path d="M11 20h10M11 24h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
       </svg>
-      <span>No entries yet. Add your first food above.</span>`;
+      <span>Nothing logged today yet.</span>`;
     $entriesList.appendChild(empty);
     return;
   }
 
-  const groups = new Map();
-  for (const e of allEntries) {
-    if (!groups.has(e.date)) groups.set(e.date, []);
-    groups.get(e.date).push(e);
+  const totalKcal  = todayEntries.reduce((s, e) => s + (e.kcal || 0), 0);
+  const hasAnyKcal = todayEntries.some(e => e.kcal != null);
+  if (hasAnyKcal && totalKcal > 0) {
+    const summary = document.createElement('div');
+    summary.className = 'date-label';
+    const span = document.createElement('span');
+    span.className = 'day-summary';
+    span.style.float = 'none';
+    span.textContent = totalKcal + '\u202fkcal today';
+    summary.appendChild(span);
+    $entriesList.appendChild(summary);
   }
-  const sortedDates = [...groups.keys()].sort((a, b) => b.localeCompare(a));
 
-  $entriesList.innerHTML = '';
-  for (const date of sortedDates) {
-    const dayEntries = groups.get(date);
-    const group = document.createElement('div');
-    group.className = 'date-group';
-
-    const label = document.createElement('div');
-    label.className = 'date-label';
-    label.textContent = formatDateLabel(date);
-
-    const totalKcal  = dayEntries.reduce((s, e) => s + (e.kcal || 0), 0);
-    const hasAnyKcal = dayEntries.some(e => e.kcal != null);
-    if (hasAnyKcal && totalKcal > 0) {
-      const summary = document.createElement('span');
-      summary.className = 'day-summary';
-      summary.textContent = totalKcal + '\u202fkcal total';
-      label.appendChild(summary);
-    }
-
-    group.appendChild(label);
-    for (const entry of dayEntries) group.appendChild(renderEntryRow(entry));
-    $entriesList.appendChild(group);
-  }
+  for (const entry of todayEntries) $entriesList.appendChild(renderEntryRow(entry));
 }
 
 // ─── Calendar ─────────────────────────────────────────────────────────────────
@@ -472,8 +463,8 @@ function renderCalendar() {
   }
 
   if (selectedDate) {
-    // Show and label the add form
-    $calForDate.textContent = formatDateLabel(selectedDate);
+    // Show and label the add form — always show the full date, not "Today"
+    $calForDate.textContent = formatFullDate(selectedDate);
     $calAddSection.classList.remove('hidden');
     renderCalEntries(selectedDate);
   } else {
