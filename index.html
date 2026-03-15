@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Food Log</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+
+    <header class="header">
+      <div class="header-left">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <rect x="2" y="5" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M2 9h16" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M6 2v3M14 2v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <rect x="5" y="12" width="2" height="2" rx="0.5" fill="currentColor"/>
+          <rect x="9" y="12" width="2" height="2" rx="0.5" fill="currentColor"/>
+        </svg>
+        <h1 class="logo">Food Log</h1>
+      </div>
+      <div class="view-toggle" role="group" aria-label="View">
+        <button class="toggle-btn active" data-view="log" aria-pressed="true">Log</button>
+        <button class="toggle-btn" data-view="calendar" aria-pressed="false">Calendar</button>
+      </div>
+    </header>
+
+    <!-- Log View -->
+    <main id="view-log" class="view">
+
+      <section class="add-form" aria-label="Add food entry">
+        <div class="form-row">
+          <input type="text" id="qty" placeholder="Quantity" class="input input-qty" aria-label="Quantity">
+          <div class="select-wrap">
+            <select id="qualifier" class="input input-qualifier" aria-label="Qualifier">
+              <option value="">— Qualifier —</option>
+              <option value="sugar-free">Sugar-free</option>
+              <option value="gluten-free">Gluten-free</option>
+              <option value="whole-grain">Whole grain</option>
+              <option value="spelt">Spelt</option>
+            </select>
+            <svg class="select-arrow" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+              <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="autocomplete-wrap">
+            <input type="text" id="food-name" placeholder="Food name" class="input input-name" autocomplete="off" aria-label="Food name" aria-autocomplete="list" aria-controls="suggestions">
+            <ul id="suggestions" class="suggestions hidden" role="listbox" aria-label="Food suggestions"></ul>
+          </div>
+          <input type="number" id="kcal" placeholder="kcal" class="input input-kcal" aria-label="Calories" min="0">
+          <button id="add-btn" class="btn-primary" aria-label="Add entry">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            Add
+          </button>
+        </div>
+      </section>
+
+      <section id="entries-list" class="entries-list" aria-label="Food entries"></section>
+
+    </main>
+
+    <!-- Calendar View -->
+    <main id="view-calendar" class="view hidden" aria-label="Calendar view">
+
+      <div class="calendar">
+        <div class="cal-header">
+          <button id="prev-month" class="cal-nav" aria-label="Previous month">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <span id="cal-month-label" class="cal-month" aria-live="polite"></span>
+          <button id="next-month" class="cal-nav" aria-label="Next month">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="cal-weekdays" aria-hidden="true">
+          <span>Mon</span><span>Tue</span><span>Wed</span>
+          <span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+        </div>
+        <div id="cal-grid" class="cal-grid" role="grid"></div>
+      </div>
+
+      <section id="cal-entries" class="entries-list cal-entries" aria-label="Entries for selected day"></section>
+
+    </main>
+
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
