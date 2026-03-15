@@ -9,10 +9,10 @@
 // Security is enforced by Firestore Rules, not by hiding the config.
 
 export const firebaseConfig = {
-  apiKey:            'YOUR_API_KEY',
-  authDomain:        'YOUR_PROJECT_ID.firebaseapp.com',
-  projectId:         'YOUR_PROJECT_ID',
-  storageBucket:     'YOUR_PROJECT_ID.appspot.com',
-  messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-  appId:             'YOUR_APP_ID',
+  apiKey:            'AIzaSyBFg6Pley9amOVt12TWj77S4nCXDi_77wg',
+  authDomain:        'food-logger-237c1.firebaseapp.com',
+  projectId:         'food-logger-237c1',
+  storageBucket:     'food-logger-237c1.firebasestorage.app',
+  messagingSenderId: '652151489373',
+  appId:             '1:652151489373:web:29609ea8e0f9d682375eb4',
 };
