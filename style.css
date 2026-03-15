@@ -454,6 +454,28 @@ body {
 
 .cal-day.selected.has-entries::after { background: rgba(255,255,255,0.5); }
 
+.cal-add-section {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  margin-bottom: 28px;
+}
+
+.cal-add-section.hidden { display: none; }
+
+.for-date-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.for-date-label strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .cal-entries {
   border-top: 1px solid var(--border);
   padding-top: 24px;

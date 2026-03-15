@@ -119,6 +119,42 @@
         <div id="cal-grid" class="cal-grid" role="grid"></div>
       </div>
 
+      <section id="cal-add-section" class="add-form cal-add-section hidden" aria-label="Add entry for selected day">
+        <div class="for-date-label">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M6 1v5l3 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+          Adding for <strong id="cal-for-date"></strong>
+        </div>
+        <div class="form-row">
+          <input type="text" id="cal-qty" placeholder="Quantity" class="input input-qty" aria-label="Quantity">
+          <div class="select-wrap">
+            <select id="cal-qualifier" class="input input-qualifier" aria-label="Qualifier">
+              <option value="">— Qualifier —</option>
+              <option value="sugar-free">Sugar-free</option>
+              <option value="gluten-free">Gluten-free</option>
+              <option value="whole-grain">Whole grain</option>
+              <option value="spelt">Spelt</option>
+            </select>
+            <svg class="select-arrow" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+              <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="autocomplete-wrap">
+            <input type="text" id="cal-food-name" placeholder="Food name" class="input input-name" autocomplete="off" aria-label="Food name" aria-autocomplete="list" aria-controls="cal-suggestions">
+            <ul id="cal-suggestions" class="suggestions hidden" role="listbox" aria-label="Food suggestions"></ul>
+          </div>
+          <input type="number" id="cal-kcal" placeholder="kcal" class="input input-kcal" aria-label="Calories" min="0">
+          <button id="cal-add-btn" class="btn-primary" aria-label="Add entry">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            Add
+          </button>
+        </div>
+      </section>
+
       <section id="cal-entries" class="entries-list cal-entries" aria-label="Entries for selected day"></section>
 
     </main>

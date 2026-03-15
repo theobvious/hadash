@@ -28,16 +28,13 @@ const firebaseApp = initializeApp(firebaseConfig);
 const auth        = getAuth(firebaseApp);
 const db          = getFirestore(firebaseApp);
 
-// Offline-first: cache writes locally when offline, sync when back online
-enableIndexedDbPersistence(db).catch(() => {
-  // Multi-tab or Safari private mode — silently fall back to memory cache
-});
+enableIndexedDbPersistence(db).catch(() => {});
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
-let currentUser       = null;
-let allEntries        = [];      // in-memory, kept in sync by onSnapshot
-let unsubscribeSnap   = null;   // cleanup handle for Firestore listener
+let currentUser     = null;
+let allEntries      = [];
+let unsubscribeSnap = null;
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 
@@ -52,13 +49,10 @@ function localDateStr(date = new Date()) {
 function formatDateLabel(dateStr) {
   const today = localDateStr();
   if (dateStr === today) return 'Today';
-
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   if (dateStr === localDateStr(yesterday)) return 'Yesterday';
-
-  const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString('en-GB', {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
 }
@@ -67,22 +61,141 @@ function formatKcal(n) {
   return n != null ? n + '\u202fkcal' : '';
 }
 
+function shake(el) {
+  el.classList.remove('shake');
+  void el.offsetWidth;
+  el.classList.add('shake');
+  el.addEventListener('animationend', () => el.classList.remove('shake'), { once: true });
+}
+
 // ─── Food history for autocomplete ───────────────────────────────────────────
 
-function getFoodHistory(query) {
+function getFoodHistory(queryStr) {
   const seen = new Map();
   for (let i = allEntries.length - 1; i >= 0; i--) {
     const e = allEntries[i];
     const key = e.name.toLowerCase();
     if (!seen.has(key)) seen.set(key, e);
   }
-
   let results = Array.from(seen.values());
-  if (query) {
-    const q = query.toLowerCase();
+  if (queryStr) {
+    const q = queryStr.toLowerCase();
     results = results.filter(e => e.name.toLowerCase().includes(q));
   }
   return results.slice(0, 8);
+}
+
+// ─── Autocomplete factory ─────────────────────────────────────────────────────
+// Creates an independent autocomplete instance for any food name input.
+// onApply(entry) is called when the user selects a suggestion.
+
+function createAutocomplete(inputEl, listEl, onApply) {
+  let focusIdx = -1;
+
+  function buildList(queryStr) {
+    const results = getFoodHistory(queryStr);
+    if (!results.length) { hide(); return; }
+
+    listEl.innerHTML = '';
+    results.forEach((entry, i) => {
+      const li = document.createElement('li');
+      li.className = 'suggestion-item';
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', 'false');
+
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = entry.name;
+      li.appendChild(nameSpan);
+
+      const meta = document.createElement('span');
+      meta.className = 'suggestion-meta';
+      if (entry.qualifier) {
+        const q = document.createElement('span');
+        q.className = 'suggestion-qualifier';
+        q.textContent = entry.qualifier;
+        meta.appendChild(q);
+      }
+      if (entry.kcal != null) {
+        const k = document.createElement('span');
+        k.className = 'suggestion-kcal';
+        k.textContent = formatKcal(entry.kcal);
+        meta.appendChild(k);
+      }
+      if (meta.children.length) li.appendChild(meta);
+
+      li.addEventListener('mousedown', e => { e.preventDefault(); onApply(entry); hide(); });
+      listEl.appendChild(li);
+    });
+
+    focusIdx = -1;
+    listEl.classList.remove('hidden');
+  }
+
+  function hide() {
+    listEl.classList.add('hidden');
+    focusIdx = -1;
+  }
+
+  function moveFocus(delta) {
+    const items = listEl.querySelectorAll('.suggestion-item');
+    if (!items.length) return;
+    focusIdx = Math.max(-1, Math.min(items.length - 1, focusIdx + delta));
+    items.forEach((item, i) => item.setAttribute('aria-selected', i === focusIdx ? 'true' : 'false'));
+  }
+
+  inputEl.addEventListener('input', () => buildList(inputEl.value.trim()));
+  inputEl.addEventListener('focus', () => buildList(inputEl.value.trim()));
+
+  inputEl.addEventListener('keydown', e => {
+    if (listEl.classList.contains('hidden')) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); moveFocus(+1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); moveFocus(-1); }
+    else if (e.key === 'Enter') {
+      if (focusIdx >= 0) {
+        e.preventDefault();
+        listEl.querySelectorAll('.suggestion-item')[focusIdx]
+          ?.dispatchEvent(new MouseEvent('mousedown'));
+      }
+    } else if (e.key === 'Escape') { hide(); }
+  });
+
+  return { hide };
+}
+
+// Hide any open suggestion list when clicking outside an autocomplete wrapper
+document.addEventListener('mousedown', e => {
+  if (!e.target.closest('.autocomplete-wrap')) {
+    document.querySelectorAll('.suggestions').forEach(el => el.classList.add('hidden'));
+  }
+});
+
+// ─── Shared entry submission ──────────────────────────────────────────────────
+
+async function submitEntry(date, { qty, qualifier, foodName, kcal, ac }) {
+  if (!currentUser) return;
+
+  const name = foodName.value.trim();
+  if (!name) { shake(foodName); foodName.focus(); return; }
+
+  const entry = {
+    date,
+    timestamp: Date.now(),
+    quantity:  qty.value.trim(),
+    qualifier: qualifier.value,
+    name,
+    kcal:      kcal.value !== '' ? parseInt(kcal.value, 10) : null,
+  };
+
+  // Reset before async write — feels instant
+  qty.value = qualifier.value = foodName.value = kcal.value = '';
+  ac.hide();
+  foodName.focus();
+
+  try {
+    await addDoc(collection(db, 'users', currentUser.uid, 'entries'), entry);
+  } catch (err) {
+    console.error('Failed to add entry:', err);
+  }
 }
 
 // ─── DOM references ───────────────────────────────────────────────────────────
@@ -100,208 +213,94 @@ const $calGrid     = document.getElementById('cal-grid');
 const $calLabel    = document.getElementById('cal-month-label');
 const $calEntries  = document.getElementById('cal-entries');
 
-const $authScreen  = document.getElementById('auth-screen');
-const $signInBtn   = document.getElementById('sign-in-btn');
-const $signOutBtn  = document.getElementById('sign-out-btn');
-const $userChip    = document.getElementById('user-chip');
-const $userAvatar  = document.getElementById('user-avatar');
-const $userName    = document.getElementById('user-name');
+const $calAddSection = document.getElementById('cal-add-section');
+const $calForDate    = document.getElementById('cal-for-date');
+const $calQty        = document.getElementById('cal-qty');
+const $calQualifier  = document.getElementById('cal-qualifier');
+const $calFoodName   = document.getElementById('cal-food-name');
+const $calKcal       = document.getElementById('cal-kcal');
+const $calAddBtn     = document.getElementById('cal-add-btn');
+const $calSuggestions = document.getElementById('cal-suggestions');
+
+const $authScreen = document.getElementById('auth-screen');
+const $signInBtn  = document.getElementById('sign-in-btn');
+const $signOutBtn = document.getElementById('sign-out-btn');
+const $userChip   = document.getElementById('user-chip');
+const $userAvatar = document.getElementById('user-avatar');
+const $userName   = document.getElementById('user-name');
+
+// ─── Wire log form ────────────────────────────────────────────────────────────
+
+const logAC = createAutocomplete($foodName, $suggestions, entry => {
+  $foodName.value = entry.name;
+  if (entry.kcal != null)  $kcal.value      = entry.kcal;
+  if (entry.qualifier)     $qualifier.value  = entry.qualifier;
+  $kcal.focus();
+});
+
+const logEls = { qty: $qty, qualifier: $qualifier, foodName: $foodName, kcal: $kcal, ac: logAC };
+
+$addBtn.addEventListener('click', () => submitEntry(localDateStr(), logEls));
+$kcal.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitEntry(localDateStr(), logEls); } });
+$foodName.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && $suggestions.classList.contains('hidden')) {
+    e.preventDefault(); submitEntry(localDateStr(), logEls);
+  }
+});
+
+// ─── Wire calendar form ───────────────────────────────────────────────────────
+
+const calAC = createAutocomplete($calFoodName, $calSuggestions, entry => {
+  $calFoodName.value = entry.name;
+  if (entry.kcal != null)  $calKcal.value      = entry.kcal;
+  if (entry.qualifier)     $calQualifier.value  = entry.qualifier;
+  $calKcal.focus();
+});
+
+const calEls = { qty: $calQty, qualifier: $calQualifier, foodName: $calFoodName, kcal: $calKcal, ac: calAC };
+
+$calAddBtn.addEventListener('click', () => submitEntry(selectedDate, calEls));
+$calKcal.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitEntry(selectedDate, calEls); } });
+$calFoodName.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && $calSuggestions.classList.contains('hidden')) {
+    e.preventDefault(); submitEntry(selectedDate, calEls);
+  }
+});
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 onAuthStateChanged(auth, user => {
   currentUser = user;
   if (user) {
-    showApp(user);
+    $authScreen.classList.add('hidden');
+    $userChip.classList.remove('hidden');
+    $userAvatar.src = user.photoURL || '';
+    $userAvatar.style.display = user.photoURL ? '' : 'none';
+    $userName.textContent = user.displayName || user.email || '';
     subscribeToEntries(user.uid);
   } else {
-    showAuthScreen();
+    $authScreen.classList.remove('hidden');
+    $userChip.classList.add('hidden');
     if (unsubscribeSnap) { unsubscribeSnap(); unsubscribeSnap = null; }
     allEntries = [];
   }
 });
 
-function showApp(user) {
-  $authScreen.classList.add('hidden');
-  $userChip.classList.remove('hidden');
-  $userAvatar.src  = user.photoURL  || '';
-  $userAvatar.style.display = user.photoURL ? '' : 'none';
-  $userName.textContent = user.displayName || user.email || '';
-}
-
-function showAuthScreen() {
-  $authScreen.classList.remove('hidden');
-  $userChip.classList.add('hidden');
-}
-
 $signInBtn.addEventListener('click', () => {
-  signInWithPopup(auth, new GoogleAuthProvider()).catch(err => {
-    console.error('Sign-in failed:', err.message);
-  });
+  signInWithPopup(auth, new GoogleAuthProvider()).catch(err => console.error('Sign-in failed:', err.message));
 });
-
-$signOutBtn.addEventListener('click', () => {
-  signOut(auth);
-});
+$signOutBtn.addEventListener('click', () => signOut(auth));
 
 // ─── Firestore subscription ───────────────────────────────────────────────────
 
 function subscribeToEntries(uid) {
   if (unsubscribeSnap) unsubscribeSnap();
-
-  const q = query(
-    collection(db, 'users', uid, 'entries'),
-    orderBy('timestamp'),
-  );
-
+  const q = query(collection(db, 'users', uid, 'entries'), orderBy('timestamp'));
   unsubscribeSnap = onSnapshot(q, snapshot => {
     allEntries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     renderLogView();
     if (!$viewCal.classList.contains('hidden')) renderCalendar();
-  }, err => {
-    console.error('Firestore read error:', err);
-  });
-}
-
-// ─── Autocomplete ─────────────────────────────────────────────────────────────
-
-let focusIdx = -1;
-
-function showSuggestions(queryStr) {
-  const results = getFoodHistory(queryStr);
-  if (!results.length) { hideSuggestions(); return; }
-
-  $suggestions.innerHTML = '';
-
-  results.forEach((entry, i) => {
-    const li = document.createElement('li');
-    li.className = 'suggestion-item';
-    li.setAttribute('role', 'option');
-    li.setAttribute('aria-selected', 'false');
-    li.dataset.idx = i;
-
-    const nameSpan = document.createElement('span');
-    nameSpan.textContent = entry.name;
-    li.appendChild(nameSpan);
-
-    const meta = document.createElement('span');
-    meta.className = 'suggestion-meta';
-
-    if (entry.qualifier) {
-      const q = document.createElement('span');
-      q.className = 'suggestion-qualifier';
-      q.textContent = entry.qualifier;
-      meta.appendChild(q);
-    }
-    if (entry.kcal != null) {
-      const k = document.createElement('span');
-      k.className = 'suggestion-kcal';
-      k.textContent = formatKcal(entry.kcal);
-      meta.appendChild(k);
-    }
-    if (meta.children.length) li.appendChild(meta);
-
-    li.addEventListener('mousedown', e => {
-      e.preventDefault();
-      applySuggestion(entry);
-    });
-
-    $suggestions.appendChild(li);
-  });
-
-  focusIdx = -1;
-  $suggestions.classList.remove('hidden');
-}
-
-function hideSuggestions() {
-  $suggestions.classList.add('hidden');
-  focusIdx = -1;
-}
-
-function applySuggestion(entry) {
-  $foodName.value  = entry.name;
-  if (entry.kcal      != null) $kcal.value      = entry.kcal;
-  if (entry.qualifier)         $qualifier.value  = entry.qualifier;
-  hideSuggestions();
-  $kcal.focus();
-}
-
-function moveFocus(delta) {
-  const items = $suggestions.querySelectorAll('.suggestion-item');
-  if (!items.length) return;
-  focusIdx = Math.max(-1, Math.min(items.length - 1, focusIdx + delta));
-  items.forEach((item, i) => item.setAttribute('aria-selected', i === focusIdx ? 'true' : 'false'));
-}
-
-$foodName.addEventListener('input', () => showSuggestions($foodName.value.trim()));
-$foodName.addEventListener('focus', () => showSuggestions($foodName.value.trim()));
-
-$foodName.addEventListener('keydown', e => {
-  if ($suggestions.classList.contains('hidden')) {
-    if (e.key === 'Enter') { e.preventDefault(); addEntry(); }
-    return;
-  }
-  if (e.key === 'ArrowDown')  { e.preventDefault(); moveFocus(+1); }
-  else if (e.key === 'ArrowUp')   { e.preventDefault(); moveFocus(-1); }
-  else if (e.key === 'Enter') {
-    e.preventDefault();
-    if (focusIdx >= 0) {
-      $suggestions.querySelectorAll('.suggestion-item')[focusIdx]
-        ?.dispatchEvent(new MouseEvent('mousedown'));
-    } else {
-      hideSuggestions();
-      addEntry();
-    }
-  } else if (e.key === 'Escape') {
-    hideSuggestions();
-  }
-});
-
-document.addEventListener('mousedown', e => {
-  if (!e.target.closest('.autocomplete-wrap')) hideSuggestions();
-});
-
-// ─── Add entry ────────────────────────────────────────────────────────────────
-
-$addBtn.addEventListener('click', addEntry);
-$kcal.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addEntry(); } });
-
-async function addEntry() {
-  if (!currentUser) return;
-
-  const name = $foodName.value.trim();
-  if (!name) {
-    $foodName.classList.remove('shake');
-    void $foodName.offsetWidth;
-    $foodName.classList.add('shake');
-    $foodName.focus();
-    $foodName.addEventListener('animationend', () => $foodName.classList.remove('shake'), { once: true });
-    return;
-  }
-
-  const entry = {
-    date:      localDateStr(),
-    timestamp: Date.now(),
-    quantity:  $qty.value.trim(),
-    qualifier: $qualifier.value,
-    name,
-    kcal:      $kcal.value !== '' ? parseInt($kcal.value, 10) : null,
-  };
-
-  // Reset form before the async write so it feels instant
-  $qty.value = '';
-  $qualifier.value = '';
-  $foodName.value = '';
-  $kcal.value = '';
-  hideSuggestions();
-  $foodName.focus();
-
-  try {
-    await addDoc(collection(db, 'users', currentUser.uid, 'entries'), entry);
-    // onSnapshot re-renders automatically
-  } catch (err) {
-    console.error('Failed to add entry:', err);
-  }
+  }, err => console.error('Firestore read error:', err));
 }
 
 // ─── Delete entry ─────────────────────────────────────────────────────────────
@@ -310,7 +309,6 @@ async function deleteEntry(id) {
   if (!currentUser) return;
   try {
     await deleteDoc(doc(db, 'users', currentUser.uid, 'entries', id));
-    // onSnapshot re-renders automatically
   } catch (err) {
     console.error('Failed to delete entry:', err);
   }
@@ -321,7 +319,6 @@ async function deleteEntry(id) {
 function renderEntryRow(entry) {
   const div = document.createElement('div');
   div.className = 'entry';
-  div.dataset.id = entry.id;
 
   const qty = document.createElement('span');
   qty.className = 'entry-qty';
@@ -377,7 +374,6 @@ function renderLogView() {
     return;
   }
 
-  // Group by date, newest date first
   const groups = new Map();
   for (const e of allEntries) {
     if (!groups.has(e.date)) groups.set(e.date, []);
@@ -386,7 +382,6 @@ function renderLogView() {
   const sortedDates = [...groups.keys()].sort((a, b) => b.localeCompare(a));
 
   $entriesList.innerHTML = '';
-
   for (const date of sortedDates) {
     const dayEntries = groups.get(date);
     const group = document.createElement('div');
@@ -425,10 +420,10 @@ const MONTH_NAMES = [
 function renderCalendar() {
   $calLabel.textContent = `${MONTH_NAMES[calMonth]} ${calYear}`;
 
-  const entryDates = new Set(allEntries.map(e => e.date));
-  const today      = localDateStr();
-  const firstDow   = new Date(calYear, calMonth, 1).getDay();
-  const startOffset  = (firstDow + 6) % 7;
+  const entryDates  = new Set(allEntries.map(e => e.date));
+  const today       = localDateStr();
+  const firstDow    = new Date(calYear, calMonth, 1).getDay();
+  const startOffset = (firstDow + 6) % 7;
   const daysInMonth  = new Date(calYear, calMonth + 1, 0).getDate();
   const daysInPrevMon = new Date(calYear, calMonth, 0).getDate();
   const totalCells   = Math.ceil((startOffset + daysInMonth) / 7) * 7;
@@ -477,8 +472,12 @@ function renderCalendar() {
   }
 
   if (selectedDate) {
+    // Show and label the add form
+    $calForDate.textContent = formatDateLabel(selectedDate);
+    $calAddSection.classList.remove('hidden');
     renderCalEntries(selectedDate);
   } else {
+    $calAddSection.classList.add('hidden');
     $calEntries.innerHTML = '<div class="empty-state"><span>Select a day to see its entries.</span></div>';
   }
 }
