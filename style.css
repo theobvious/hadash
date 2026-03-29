@@ -126,7 +126,6 @@ body {
 .input:focus { border-color: var(--border-mid); }
 
 .input-qty      { width: 90px; }
-.input-kcal     { width: 80px; }
 .input-qualifier { width: 100%; appearance: none; cursor: pointer; }
 .input-name     { width: 100%; }
 
@@ -352,16 +351,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.entry-kcal {
-  font-size: 13px;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  min-width: 58px;
-  text-align: right;
-  flex-shrink: 0;
 }
 
 .entry-edit,
@@ -676,8 +665,7 @@ body {
 
   .form-row { gap: 6px; }
   .input-qty  { width: 76px; }
-  .input-kcal { width: 68px; }
-  .select-wrap { width: 130px; }
+  .qualifier-wrap { width: 130px; }
 
   .entry-qty { min-width: 40px; }
 

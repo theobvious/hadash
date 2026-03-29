@@ -62,10 +62,6 @@ function formatFullDate(dateStr) {
   });
 }
 
-function formatKcal(n) {
-  return n != null ? n + '\u202fkcal' : '';
-}
-
 function shake(el) {
   el.classList.remove('shake');
   void el.offsetWidth;
@@ -283,7 +279,7 @@ document.addEventListener('mousedown', e => {
 
 // ─── Shared entry submission ──────────────────────────────────────────────────
 
-async function submitEntry(date, { qty, qualSel, foodName, kcal, ac }) {
+async function submitEntry(date, { qty, qualSel, foodName, ac }) {
   if (!currentUser) return;
 
   const name = foodName.value.trim();
@@ -295,11 +291,10 @@ async function submitEntry(date, { qty, qualSel, foodName, kcal, ac }) {
     quantity:  qty.value.trim(),
     qualifier: qualSel.getValues(),
     name,
-    kcal:      kcal.value !== '' ? parseInt(kcal.value, 10) : null,
   };
 
   // Reset before async write — feels instant
-  qty.value = foodName.value = kcal.value = '';
+  qty.value = foodName.value = '';
   qualSel.reset();
   ac.hide();
   foodName.focus();
@@ -316,7 +311,6 @@ async function submitEntry(date, { qty, qualSel, foodName, kcal, ac }) {
 const $qty              = document.getElementById('qty');
 const $qualifierWrap    = document.getElementById('qualifier-wrap');
 const $foodName         = document.getElementById('food-name');
-const $kcal             = document.getElementById('kcal');
 const $addBtn           = document.getElementById('add-btn');
 const $suggestions      = document.getElementById('suggestions');
 const $entriesList      = document.getElementById('entries-list');
@@ -331,7 +325,6 @@ const $calForDate       = document.getElementById('cal-for-date');
 const $calQty           = document.getElementById('cal-qty');
 const $calQualifierWrap = document.getElementById('cal-qualifier-wrap');
 const $calFoodName      = document.getElementById('cal-food-name');
-const $calKcal          = document.getElementById('cal-kcal');
 const $calAddBtn        = document.getElementById('cal-add-btn');
 const $calSuggestions   = document.getElementById('cal-suggestions');
 
@@ -348,17 +341,12 @@ const logQualSel = createQualifierSelect($qualifierWrap);
 
 const logAC = createAutocomplete($foodName, $suggestions, entry => {
   $foodName.value = entry.name;
-  if (entry.kcal != null) $kcal.value = entry.kcal;
   logQualSel.setValues(toQualArray(entry.qualifier));
-  $kcal.focus();
 });
 
-const logEls = { qty: $qty, qualSel: logQualSel, foodName: $foodName, kcal: $kcal, ac: logAC };
+const logEls = { qty: $qty, qualSel: logQualSel, foodName: $foodName, ac: logAC };
 
 $addBtn.addEventListener('click', () => submitEntry(localDateStr(), logEls));
-$kcal.addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); submitEntry(localDateStr(), logEls); }
-});
 $foodName.addEventListener('keydown', e => {
   if (e.key === 'Enter' && $suggestions.classList.contains('hidden')) {
     e.preventDefault(); submitEntry(localDateStr(), logEls);
@@ -371,17 +359,12 @@ const calQualSel = createQualifierSelect($calQualifierWrap);
 
 const calAC = createAutocomplete($calFoodName, $calSuggestions, entry => {
   $calFoodName.value = entry.name;
-  if (entry.kcal != null) $calKcal.value = entry.kcal;
   calQualSel.setValues(toQualArray(entry.qualifier));
-  $calKcal.focus();
 });
 
-const calEls = { qty: $calQty, qualSel: calQualSel, foodName: $calFoodName, kcal: $calKcal, ac: calAC };
+const calEls = { qty: $calQty, qualSel: calQualSel, foodName: $calFoodName, ac: calAC };
 
 $calAddBtn.addEventListener('click', () => submitEntry(selectedDate, calEls));
-$calKcal.addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); submitEntry(selectedDate, calEls); }
-});
 $calFoodName.addEventListener('keydown', e => {
   if (e.key === 'Enter' && $calSuggestions.classList.contains('hidden')) {
     e.preventDefault(); submitEntry(selectedDate, calEls);
@@ -470,14 +453,6 @@ function showEditForm(div, entry) {
   nameInput.placeholder = 'Food name';
   div.appendChild(nameInput);
 
-  const kcalInput = document.createElement('input');
-  kcalInput.type = 'number';
-  kcalInput.className = 'input input-kcal';
-  kcalInput.value = entry.kcal != null ? entry.kcal : '';
-  kcalInput.placeholder = 'kcal';
-  kcalInput.min = '0';
-  div.appendChild(kcalInput);
-
   const saveBtn = document.createElement('button');
   saveBtn.type = 'button';
   saveBtn.className = 'btn-primary entry-save-btn';
@@ -498,13 +473,11 @@ function showEditForm(div, entry) {
       quantity:  qtyInput.value.trim(),
       qualifier: editQualSel.getValues(),
       name,
-      kcal: kcalInput.value !== '' ? parseInt(kcalInput.value, 10) : null,
     });
     // onSnapshot will re-render automatically
   }
 
   saveBtn.addEventListener('click', save);
-  kcalInput.addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
 
   cancelBtn.addEventListener('click', () => {
     div.classList.remove('entry-editing');
@@ -539,11 +512,6 @@ function renderEntryRow(entry) {
   name.title = entry.name;
   name.textContent = entry.name;
   div.appendChild(name);
-
-  const kcal = document.createElement('span');
-  kcal.className = 'entry-kcal';
-  kcal.textContent = formatKcal(entry.kcal);
-  div.appendChild(kcal);
 
   const edit = document.createElement('button');
   edit.className = 'entry-edit';
@@ -586,19 +554,6 @@ function renderLogView() {
       <span>Nothing logged today yet.</span>`;
     $entriesList.appendChild(empty);
     return;
-  }
-
-  const totalKcal  = todayEntries.reduce((s, e) => s + (e.kcal || 0), 0);
-  const hasAnyKcal = todayEntries.some(e => e.kcal != null);
-  if (hasAnyKcal && totalKcal > 0) {
-    const summary = document.createElement('div');
-    summary.className = 'date-label';
-    const span = document.createElement('span');
-    span.className = 'day-summary';
-    span.style.float = 'none';
-    span.textContent = totalKcal + '\u202fkcal today';
-    summary.appendChild(span);
-    $entriesList.appendChild(summary);
   }
 
   for (const entry of todayEntries) $entriesList.appendChild(renderEntryRow(entry));
@@ -687,15 +642,6 @@ function renderCalEntries(dateStr) {
   const label = document.createElement('div');
   label.className = 'date-label';
   label.textContent = formatDateLabel(dateStr);
-
-  const totalKcal  = dayEntries.reduce((s, e) => s + (e.kcal || 0), 0);
-  const hasAnyKcal = dayEntries.some(e => e.kcal != null);
-  if (hasAnyKcal && totalKcal > 0) {
-    const summary = document.createElement('span');
-    summary.className = 'day-summary';
-    summary.textContent = totalKcal + '\u202fkcal total';
-    label.appendChild(summary);
-  }
 
   $calEntries.appendChild(label);
 
