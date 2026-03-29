@@ -13,6 +13,7 @@ import {
   collection,
   addDoc,
   deleteDoc,
+  updateDoc,
   doc,
   query,
   orderBy,
@@ -72,6 +73,104 @@ function shake(el) {
   el.addEventListener('animationend', () => el.classList.remove('shake'), { once: true });
 }
 
+// ─── Qualifier helpers ────────────────────────────────────────────────────────
+
+const QUALIFIERS = [
+  { value: 'sugar-free',  label: 'Sugar-free'  },
+  { value: 'gluten-free', label: 'Gluten-free' },
+  { value: 'whole-grain', label: 'Whole grain' },
+  { value: 'spelt',       label: 'Spelt'       },
+];
+
+function qualifierLabel(value) {
+  return QUALIFIERS.find(q => q.value === value)?.label ?? value;
+}
+
+// Handle old entries that stored qualifier as a string
+function toQualArray(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  return [raw];
+}
+
+// ─── Qualifier multi-select factory ──────────────────────────────────────────
+// Builds the dropdown inside wrapEl and returns { getValues, setValues, reset }.
+
+function createQualifierSelect(wrapEl) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'input input-qualifier qualifier-btn';
+  btn.setAttribute('aria-haspopup', 'listbox');
+  btn.setAttribute('aria-expanded', 'false');
+
+  const labelSpan = document.createElement('span');
+  labelSpan.className = 'qualifier-label';
+  btn.appendChild(labelSpan);
+
+  // Arrow SVG
+  btn.insertAdjacentHTML('beforeend',
+    `<svg class="select-arrow" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+       <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+     </svg>`);
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'qualifier-dropdown hidden';
+  dropdown.setAttribute('role', 'listbox');
+  dropdown.setAttribute('aria-multiselectable', 'true');
+
+  QUALIFIERS.forEach(({ value, label }) => {
+    const lbl = document.createElement('label');
+    lbl.className = 'qualifier-option';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = value;
+    cb.addEventListener('change', syncLabel);
+    lbl.appendChild(cb);
+    lbl.append(' ' + label);
+    dropdown.appendChild(lbl);
+  });
+
+  wrapEl.appendChild(btn);
+  wrapEl.appendChild(dropdown);
+
+  function syncLabel() {
+    const vals = getValues();
+    if (vals.length) {
+      labelSpan.textContent = vals.map(qualifierLabel).join(', ');
+      labelSpan.style.color = '';
+    } else {
+      labelSpan.textContent = '— Qualifier —';
+      labelSpan.style.color = 'var(--text-dim)';
+    }
+  }
+
+  function getValues() {
+    return Array.from(dropdown.querySelectorAll('input:checked')).map(cb => cb.value);
+  }
+
+  function setValues(vals) {
+    dropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.checked = vals.includes(cb.value);
+    });
+    syncLabel();
+  }
+
+  function reset() { setValues([]); }
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const isOpen = !dropdown.classList.contains('hidden');
+    dropdown.classList.toggle('hidden', isOpen);
+    btn.setAttribute('aria-expanded', String(!isOpen));
+  });
+
+  // Prevent clicks inside dropdown from bubbling to the outside-click handler
+  dropdown.addEventListener('mousedown', e => e.stopPropagation());
+
+  syncLabel(); // set initial placeholder
+  return { getValues, setValues, reset };
+}
+
 // ─── Food history for autocomplete ───────────────────────────────────────────
 
 function getFoodHistory(queryStr) {
@@ -90,8 +189,6 @@ function getFoodHistory(queryStr) {
 }
 
 // ─── Autocomplete factory ─────────────────────────────────────────────────────
-// Creates an independent autocomplete instance for any food name input.
-// onApply(entry) is called when the user selects a suggestion.
 
 function createAutocomplete(inputEl, listEl, onApply) {
   let focusIdx = -1;
@@ -101,7 +198,7 @@ function createAutocomplete(inputEl, listEl, onApply) {
     if (!results.length) { hide(); return; }
 
     listEl.innerHTML = '';
-    results.forEach((entry, i) => {
+    results.forEach((entry) => {
       const li = document.createElement('li');
       li.className = 'suggestion-item';
       li.setAttribute('role', 'option');
@@ -113,12 +210,12 @@ function createAutocomplete(inputEl, listEl, onApply) {
 
       const meta = document.createElement('span');
       meta.className = 'suggestion-meta';
-      if (entry.qualifier) {
+      toQualArray(entry.qualifier).forEach(qv => {
         const q = document.createElement('span');
         q.className = 'suggestion-qualifier';
-        q.textContent = entry.qualifier;
+        q.textContent = qualifierLabel(qv);
         meta.appendChild(q);
-      }
+      });
       if (entry.kcal != null) {
         const k = document.createElement('span');
         k.className = 'suggestion-kcal';
@@ -147,8 +244,15 @@ function createAutocomplete(inputEl, listEl, onApply) {
     items.forEach((item, i) => item.setAttribute('aria-selected', i === focusIdx ? 'true' : 'false'));
   }
 
-  inputEl.addEventListener('input', () => buildList(inputEl.value.trim()));
-  inputEl.addEventListener('focus', () => buildList(inputEl.value.trim()));
+  // Only show suggestions after 3 characters
+  inputEl.addEventListener('input', () => {
+    const val = inputEl.value.trim();
+    if (val.length >= 3) buildList(val); else hide();
+  });
+  inputEl.addEventListener('focus', () => {
+    const val = inputEl.value.trim();
+    if (val.length >= 3) buildList(val);
+  });
 
   inputEl.addEventListener('keydown', e => {
     if (listEl.classList.contains('hidden')) return;
@@ -166,16 +270,20 @@ function createAutocomplete(inputEl, listEl, onApply) {
   return { hide };
 }
 
-// Hide any open suggestion list when clicking outside an autocomplete wrapper
+// Close suggestions and qualifier dropdowns on outside click
 document.addEventListener('mousedown', e => {
   if (!e.target.closest('.autocomplete-wrap')) {
     document.querySelectorAll('.suggestions').forEach(el => el.classList.add('hidden'));
+  }
+  if (!e.target.closest('.qualifier-wrap')) {
+    document.querySelectorAll('.qualifier-dropdown').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.qualifier-btn').forEach(el => el.setAttribute('aria-expanded', 'false'));
   }
 });
 
 // ─── Shared entry submission ──────────────────────────────────────────────────
 
-async function submitEntry(date, { qty, qualifier, foodName, kcal, ac }) {
+async function submitEntry(date, { qty, qualSel, foodName, kcal, ac }) {
   if (!currentUser) return;
 
   const name = foodName.value.trim();
@@ -185,13 +293,14 @@ async function submitEntry(date, { qty, qualifier, foodName, kcal, ac }) {
     date,
     timestamp: Date.now(),
     quantity:  qty.value.trim(),
-    qualifier: qualifier.value,
+    qualifier: qualSel.getValues(),
     name,
     kcal:      kcal.value !== '' ? parseInt(kcal.value, 10) : null,
   };
 
   // Reset before async write — feels instant
-  qty.value = qualifier.value = foodName.value = kcal.value = '';
+  qty.value = foodName.value = kcal.value = '';
+  qualSel.reset();
   ac.hide();
   foodName.focus();
 
@@ -204,27 +313,27 @@ async function submitEntry(date, { qty, qualifier, foodName, kcal, ac }) {
 
 // ─── DOM references ───────────────────────────────────────────────────────────
 
-const $qty         = document.getElementById('qty');
-const $qualifier   = document.getElementById('qualifier');
-const $foodName    = document.getElementById('food-name');
-const $kcal        = document.getElementById('kcal');
-const $addBtn      = document.getElementById('add-btn');
-const $suggestions = document.getElementById('suggestions');
-const $entriesList = document.getElementById('entries-list');
-const $viewLog     = document.getElementById('view-log');
-const $viewCal     = document.getElementById('view-calendar');
-const $calGrid     = document.getElementById('cal-grid');
-const $calLabel    = document.getElementById('cal-month-label');
-const $calEntries  = document.getElementById('cal-entries');
+const $qty              = document.getElementById('qty');
+const $qualifierWrap    = document.getElementById('qualifier-wrap');
+const $foodName         = document.getElementById('food-name');
+const $kcal             = document.getElementById('kcal');
+const $addBtn           = document.getElementById('add-btn');
+const $suggestions      = document.getElementById('suggestions');
+const $entriesList      = document.getElementById('entries-list');
+const $viewLog          = document.getElementById('view-log');
+const $viewCal          = document.getElementById('view-calendar');
+const $calGrid          = document.getElementById('cal-grid');
+const $calLabel         = document.getElementById('cal-month-label');
+const $calEntries       = document.getElementById('cal-entries');
 
-const $calAddSection = document.getElementById('cal-add-section');
-const $calForDate    = document.getElementById('cal-for-date');
-const $calQty        = document.getElementById('cal-qty');
-const $calQualifier  = document.getElementById('cal-qualifier');
-const $calFoodName   = document.getElementById('cal-food-name');
-const $calKcal       = document.getElementById('cal-kcal');
-const $calAddBtn     = document.getElementById('cal-add-btn');
-const $calSuggestions = document.getElementById('cal-suggestions');
+const $calAddSection    = document.getElementById('cal-add-section');
+const $calForDate       = document.getElementById('cal-for-date');
+const $calQty           = document.getElementById('cal-qty');
+const $calQualifierWrap = document.getElementById('cal-qualifier-wrap');
+const $calFoodName      = document.getElementById('cal-food-name');
+const $calKcal          = document.getElementById('cal-kcal');
+const $calAddBtn        = document.getElementById('cal-add-btn');
+const $calSuggestions   = document.getElementById('cal-suggestions');
 
 const $authScreen = document.getElementById('auth-screen');
 const $signInBtn  = document.getElementById('sign-in-btn');
@@ -235,17 +344,21 @@ const $userName   = document.getElementById('user-name');
 
 // ─── Wire log form ────────────────────────────────────────────────────────────
 
+const logQualSel = createQualifierSelect($qualifierWrap);
+
 const logAC = createAutocomplete($foodName, $suggestions, entry => {
   $foodName.value = entry.name;
-  if (entry.kcal != null)  $kcal.value      = entry.kcal;
-  if (entry.qualifier)     $qualifier.value  = entry.qualifier;
+  if (entry.kcal != null) $kcal.value = entry.kcal;
+  logQualSel.setValues(toQualArray(entry.qualifier));
   $kcal.focus();
 });
 
-const logEls = { qty: $qty, qualifier: $qualifier, foodName: $foodName, kcal: $kcal, ac: logAC };
+const logEls = { qty: $qty, qualSel: logQualSel, foodName: $foodName, kcal: $kcal, ac: logAC };
 
 $addBtn.addEventListener('click', () => submitEntry(localDateStr(), logEls));
-$kcal.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitEntry(localDateStr(), logEls); } });
+$kcal.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); submitEntry(localDateStr(), logEls); }
+});
 $foodName.addEventListener('keydown', e => {
   if (e.key === 'Enter' && $suggestions.classList.contains('hidden')) {
     e.preventDefault(); submitEntry(localDateStr(), logEls);
@@ -254,17 +367,21 @@ $foodName.addEventListener('keydown', e => {
 
 // ─── Wire calendar form ───────────────────────────────────────────────────────
 
+const calQualSel = createQualifierSelect($calQualifierWrap);
+
 const calAC = createAutocomplete($calFoodName, $calSuggestions, entry => {
   $calFoodName.value = entry.name;
-  if (entry.kcal != null)  $calKcal.value      = entry.kcal;
-  if (entry.qualifier)     $calQualifier.value  = entry.qualifier;
+  if (entry.kcal != null) $calKcal.value = entry.kcal;
+  calQualSel.setValues(toQualArray(entry.qualifier));
   $calKcal.focus();
 });
 
-const calEls = { qty: $calQty, qualifier: $calQualifier, foodName: $calFoodName, kcal: $calKcal, ac: calAC };
+const calEls = { qty: $calQty, qualSel: calQualSel, foodName: $calFoodName, kcal: $calKcal, ac: calAC };
 
 $calAddBtn.addEventListener('click', () => submitEntry(selectedDate, calEls));
-$calKcal.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitEntry(selectedDate, calEls); } });
+$calKcal.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); submitEntry(selectedDate, calEls); }
+});
 $calFoodName.addEventListener('keydown', e => {
   if (e.key === 'Enter' && $calSuggestions.classList.contains('hidden')) {
     e.preventDefault(); submitEntry(selectedDate, calEls);
@@ -307,7 +424,7 @@ function subscribeToEntries(uid) {
   }, err => console.error('Firestore read error:', err));
 }
 
-// ─── Delete entry ─────────────────────────────────────────────────────────────
+// ─── Delete / update entry ────────────────────────────────────────────────────
 
 async function deleteEntry(id) {
   if (!currentUser) return;
@@ -316,6 +433,87 @@ async function deleteEntry(id) {
   } catch (err) {
     console.error('Failed to delete entry:', err);
   }
+}
+
+async function saveEntryEdit(id, data) {
+  if (!currentUser) return;
+  try {
+    await updateDoc(doc(db, 'users', currentUser.uid, 'entries', id), data);
+  } catch (err) {
+    console.error('Failed to update entry:', err);
+  }
+}
+
+// ─── Inline edit form ─────────────────────────────────────────────────────────
+
+function showEditForm(div, entry) {
+  div.innerHTML = '';
+  div.classList.add('entry-editing');
+
+  const qtyInput = document.createElement('input');
+  qtyInput.type = 'text';
+  qtyInput.className = 'input input-qty';
+  qtyInput.value = entry.quantity || '';
+  qtyInput.placeholder = 'Qty';
+  div.appendChild(qtyInput);
+
+  const qualWrap = document.createElement('div');
+  qualWrap.className = 'qualifier-wrap';
+  div.appendChild(qualWrap);
+  const editQualSel = createQualifierSelect(qualWrap);
+  editQualSel.setValues(toQualArray(entry.qualifier));
+
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.className = 'input input-name';
+  nameInput.value = entry.name;
+  nameInput.placeholder = 'Food name';
+  div.appendChild(nameInput);
+
+  const kcalInput = document.createElement('input');
+  kcalInput.type = 'number';
+  kcalInput.className = 'input input-kcal';
+  kcalInput.value = entry.kcal != null ? entry.kcal : '';
+  kcalInput.placeholder = 'kcal';
+  kcalInput.min = '0';
+  div.appendChild(kcalInput);
+
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'btn-primary entry-save-btn';
+  saveBtn.textContent = 'Save';
+  div.appendChild(saveBtn);
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'entry-cancel-btn';
+  cancelBtn.textContent = 'Cancel';
+  div.appendChild(cancelBtn);
+
+  async function save() {
+    const name = nameInput.value.trim();
+    if (!name) { shake(nameInput); return; }
+    saveBtn.disabled = cancelBtn.disabled = true;
+    await saveEntryEdit(entry.id, {
+      quantity:  qtyInput.value.trim(),
+      qualifier: editQualSel.getValues(),
+      name,
+      kcal: kcalInput.value !== '' ? parseInt(kcalInput.value, 10) : null,
+    });
+    // onSnapshot will re-render automatically
+  }
+
+  saveBtn.addEventListener('click', save);
+  kcalInput.addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
+
+  cancelBtn.addEventListener('click', () => {
+    div.classList.remove('entry-editing');
+    const current = allEntries.find(e => e.id === entry.id) || entry;
+    div.replaceWith(renderEntryRow(current));
+  });
+
+  nameInput.focus();
+  nameInput.select();
 }
 
 // ─── Render entry row ─────────────────────────────────────────────────────────
@@ -329,12 +527,12 @@ function renderEntryRow(entry) {
   qty.textContent = entry.quantity || '—';
   div.appendChild(qty);
 
-  if (entry.qualifier) {
+  toQualArray(entry.qualifier).forEach(qv => {
     const q = document.createElement('span');
     q.className = 'entry-qualifier';
-    q.textContent = entry.qualifier;
+    q.textContent = qualifierLabel(qv);
     div.appendChild(q);
-  }
+  });
 
   const name = document.createElement('span');
   name.className = 'entry-name';
@@ -346,6 +544,15 @@ function renderEntryRow(entry) {
   kcal.className = 'entry-kcal';
   kcal.textContent = formatKcal(entry.kcal);
   div.appendChild(kcal);
+
+  const edit = document.createElement('button');
+  edit.className = 'entry-edit';
+  edit.setAttribute('aria-label', 'Edit ' + entry.name);
+  edit.innerHTML = `<svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+    <path d="M8.5 2l2.5 2.5-7 7H1.5V9L8.5 2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+  </svg>`;
+  edit.addEventListener('click', () => showEditForm(div, entry));
+  div.appendChild(edit);
 
   const del = document.createElement('button');
   del.className = 'entry-delete';
@@ -359,7 +566,7 @@ function renderEntryRow(entry) {
   return div;
 }
 
-// ─── Render log view (today only) ────────────────────────────────────────────
+// ─── Render log view (today only) ─────────────────────────────────────────────
 
 function renderLogView() {
   const todayEntries = allEntries.filter(e => e.date === localDateStr());
@@ -399,8 +606,8 @@ function renderLogView() {
 
 // ─── Calendar ─────────────────────────────────────────────────────────────────
 
-let calYear     = new Date().getFullYear();
-let calMonth    = new Date().getMonth();
+let calYear      = new Date().getFullYear();
+let calMonth     = new Date().getMonth();
 let selectedDate = null;
 
 const MONTH_NAMES = [
@@ -411,13 +618,13 @@ const MONTH_NAMES = [
 function renderCalendar() {
   $calLabel.textContent = `${MONTH_NAMES[calMonth]} ${calYear}`;
 
-  const entryDates  = new Set(allEntries.map(e => e.date));
-  const today       = localDateStr();
-  const firstDow    = new Date(calYear, calMonth, 1).getDay();
-  const startOffset = (firstDow + 6) % 7;
-  const daysInMonth  = new Date(calYear, calMonth + 1, 0).getDate();
+  const entryDates    = new Set(allEntries.map(e => e.date));
+  const today         = localDateStr();
+  const firstDow      = new Date(calYear, calMonth, 1).getDay();
+  const startOffset   = (firstDow + 6) % 7;
+  const daysInMonth   = new Date(calYear, calMonth + 1, 0).getDate();
   const daysInPrevMon = new Date(calYear, calMonth, 0).getDate();
-  const totalCells   = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+  const totalCells    = Math.ceil((startOffset + daysInMonth) / 7) * 7;
 
   $calGrid.innerHTML = '';
 
@@ -463,7 +670,6 @@ function renderCalendar() {
   }
 
   if (selectedDate) {
-    // Show and label the add form — always show the full date, not "Today"
     $calForDate.textContent = formatFullDate(selectedDate);
     $calAddSection.classList.remove('hidden');
     renderCalEntries(selectedDate);

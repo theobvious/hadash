@@ -130,19 +130,66 @@ body {
 .input-qualifier { width: 100%; appearance: none; cursor: pointer; }
 .input-name     { width: 100%; }
 
-/* qualifier select wrapper */
-.select-wrap {
+/* qualifier multi-select */
+.qualifier-wrap {
   position: relative;
   width: 140px;
   flex-shrink: 0;
 }
+
+.qualifier-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  gap: 4px;
+}
+
+.qualifier-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .select-arrow {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
+  flex-shrink: 0;
   color: var(--text-dim);
+}
+
+.qualifier-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+  z-index: 200;
+  overflow: hidden;
+  padding: 4px 0;
+}
+
+.qualifier-dropdown.hidden { display: none; }
+
+.qualifier-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.qualifier-option:hover { background: var(--bg-hover); }
+
+.qualifier-option input[type="checkbox"] {
+  accent-color: var(--text);
+  flex-shrink: 0;
 }
 
 /* food name autocomplete */
@@ -317,6 +364,7 @@ body {
   flex-shrink: 0;
 }
 
+.entry-edit,
 .entry-delete {
   background: none;
   border: none;
@@ -331,8 +379,42 @@ body {
   flex-shrink: 0;
 }
 
+.entry:hover .entry-edit,
 .entry:hover .entry-delete { opacity: 1; }
+.entry-edit:hover,
 .entry-delete:hover { color: var(--text); }
+
+/* Inline edit form */
+.entry-editing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+}
+
+.entry-editing .input-name { flex: 1; min-width: 120px; }
+
+.entry-save-btn {
+  padding: 0 14px;
+  height: 34px;
+  font-size: 13px;
+}
+
+.entry-cancel-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 12px;
+  height: 34px;
+  font-size: 13px;
+  font-family: var(--font);
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background 0.12s;
+}
+
+.entry-cancel-btn:hover { background: var(--bg-hover); }
 
 /* ─── Empty state ────────────────────────── */
 
