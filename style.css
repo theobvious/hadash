@@ -658,6 +658,75 @@ body {
   background: var(--bg-hover);
 }
 
+/* ─── Toast (undo delete) ───────────────── */
+
+.toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(16px);
+  background: var(--text);
+  color: var(--bg);
+  border-radius: var(--radius);
+  padding: 10px 12px 10px 16px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.22);
+  z-index: 600;
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  white-space: nowrap;
+}
+
+.toast.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.toast-undo {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 4px;
+  color: inherit;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 3px 10px;
+  transition: background 0.12s;
+}
+
+.toast-undo:hover { background: rgba(255,255,255,0.15); }
+
+/* ─── Calendar today button ──────────────── */
+
+.cal-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cal-today-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-family: var(--font);
+  color: var(--text-muted);
+  transition: background 0.12s, color 0.12s;
+}
+
+.cal-today-btn:hover {
+  background: var(--bg-subtle);
+  color: var(--text);
+}
+
 /* ─── Responsive ─────────────────────────── */
 
 @media (max-width: 540px) {

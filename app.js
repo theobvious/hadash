@@ -170,18 +170,25 @@ function createQualifierSelect(wrapEl) {
 // ─── Food history for autocomplete ───────────────────────────────────────────
 
 function getFoodHistory(queryStr) {
-  const seen = new Map();
-  for (let i = allEntries.length - 1; i >= 0; i--) {
-    const e = allEntries[i];
+  // Count how many times each food name has been logged
+  const counts   = new Map();
+  const lastSeen = new Map();
+  for (const e of allEntries) {
     const key = e.name.toLowerCase();
-    if (!seen.has(key)) seen.set(key, e);
+    counts.set(key, (counts.get(key) || 0) + 1);
+    lastSeen.set(key, e); // keep the most-recent entry for qualifier data
   }
-  let results = Array.from(seen.values());
+
+  let keys = Array.from(counts.keys());
   if (queryStr) {
     const q = queryStr.toLowerCase();
-    results = results.filter(e => e.name.toLowerCase().includes(q));
+    keys = keys.filter(k => k.includes(q));
   }
-  return results.slice(0, 8);
+
+  // Sort by frequency descending, alphabetically as tiebreaker
+  keys.sort((a, b) => (counts.get(b) - counts.get(a)) || a.localeCompare(b));
+
+  return keys.slice(0, 8).map(k => lastSeen.get(k));
 }
 
 // ─── Autocomplete factory ─────────────────────────────────────────────────────
@@ -407,12 +414,54 @@ function subscribeToEntries(uid) {
   }, err => console.error('Firestore read error:', err));
 }
 
+// ─── Toast (undo delete) ──────────────────────────────────────────────────────
+
+const $toast = (() => {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.setAttribute('role', 'status');
+  el.setAttribute('aria-live', 'polite');
+  el.innerHTML = `<span class="toast-msg"></span>
+    <button type="button" class="toast-undo">Undo</button>`;
+  document.body.appendChild(el);
+  return el;
+})();
+
+let toastTimer = null;
+
+function showUndoToast(deletedEntry) {
+  clearTimeout(toastTimer);
+  $toast.querySelector('.toast-msg').textContent = `"${deletedEntry.name}" deleted`;
+  $toast.classList.add('visible');
+
+  // Replace undo button to drop any previous listener
+  const oldBtn = $toast.querySelector('.toast-undo');
+  const undoBtn = oldBtn.cloneNode(true);
+  oldBtn.replaceWith(undoBtn);
+
+  undoBtn.addEventListener('click', async () => {
+    $toast.classList.remove('visible');
+    clearTimeout(toastTimer);
+    const { id, ...data } = deletedEntry;
+    try {
+      await addDoc(collection(db, 'users', currentUser.uid, 'entries'), data);
+    } catch (err) {
+      console.error('Failed to undo delete:', err);
+    }
+  });
+
+  toastTimer = setTimeout(() => $toast.classList.remove('visible'), 5000);
+}
+
 // ─── Delete / update entry ────────────────────────────────────────────────────
 
 async function deleteEntry(id) {
   if (!currentUser) return;
+  const entry = allEntries.find(e => e.id === id);
+  if (!entry) return;
   try {
     await deleteDoc(doc(db, 'users', currentUser.uid, 'entries', id));
+    showUndoToast(entry);
   } catch (err) {
     console.error('Failed to delete entry:', err);
   }
@@ -663,6 +712,14 @@ document.getElementById('prev-month').addEventListener('click', () => {
 
 document.getElementById('next-month').addEventListener('click', () => {
   if (++calMonth > 11) { calMonth = 0; calYear++; }
+  renderCalendar();
+});
+
+document.getElementById('cal-today-btn').addEventListener('click', () => {
+  const now = new Date();
+  calYear  = now.getFullYear();
+  calMonth = now.getMonth();
+  selectedDate = localDateStr();
   renderCalendar();
 });
 
